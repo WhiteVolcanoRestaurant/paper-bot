@@ -2,7 +2,7 @@
 
 每日读取 arXiv 最新论文，关键词初筛后用 DeepSeek 判定相关性并生成结构化摘要，可推送飞书、收录到 Zotero。入口保持 `python main.py`，不需要 Zotero 桌面插件。
 
-公开代码仓库：[WhiteVolcanoRestaurant/paper-bot-code](https://github.com/WhiteVolcanoRestaurant/paper-bot-code)。此仓库使用新的提交历史，只包含代码、文档、配置模板和工作流，不包含私人运行状态。自己的运行仓库建议保持 Private，并配置自己的 Secrets 和 Variables。
+公开代码仓库：[WhiteVolcanoRestaurant/paper-bot](https://github.com/WhiteVolcanoRestaurant/paper-bot)。此仓库使用新的提交历史，只包含代码、文档、配置模板和工作流，不包含私人运行状态。自己的运行仓库建议保持 Private，并配置自己的 Secrets 和 Variables。
 
 **默认关闭历史状态持久化。** 本地与 GitHub Actions 默认只在本次运行的内存中记录进度，不创建状态文件、不读取或更新 `bot-state`、不自动提交 Git。Zotero 仍会通过云端条目查重；AI 筛选结果和飞书发送历史不会跨运行保留，因此可能重复调用 AI、重复推送，也不能跨运行累计每日预算或恢复已离开最新列表的失败论文。需要这些功能时再主动开启持久化。关闭此功能不影响文献写入 Zotero，也不会删除已有状态分支、历史提交或 Actions 日志。
 
@@ -115,8 +115,10 @@ Workflow 使用固定 concurrency group `paper-bot-state`，`cancel-in-progress:
 在**运行仓库的本地克隆目录**中操作，先提交或备份自己的代码改动，确认 `git status --short` 没有输出。首次添加公开仓库作为上游：
 
 ```sh
-git remote add upstream https://github.com/WhiteVolcanoRestaurant/paper-bot-code.git
+git remote add upstream https://github.com/WhiteVolcanoRestaurant/paper-bot.git
 ```
+
+如果之前已经添加过 `upstream`，改用 `git remote set-url upstream https://github.com/WhiteVolcanoRestaurant/paper-bot.git` 更新地址。若运行仓库曾改名，也要先用 `git remote set-url origin <运行仓库的新地址>` 更新它；旧名称被其他仓库复用后，不能继续依赖旧地址的重定向。
 
 以后每次更新执行：
 
