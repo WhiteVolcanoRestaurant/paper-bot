@@ -1,0 +1,87 @@
+name: Daily paper bot
+
+on:
+  schedule:
+    - cron: '0 4 * * *' # 12:00 Asia/Shanghai; GitHub may delay execution.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# All workflows that write bot-state must use this same group.
+concurrency:
+  group: paper-bot-state
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+
+  daily:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Used for bot-state only when persistence is explicitly enabled.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Prepare dedicated state worktree
+        env:
+          ENABLE_PERSISTENCE: ${{ vars.ENABLE_PERSISTENCE || 'false' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${ENABLE_PERSISTENCE,,}" in
+            false|0) echo 'Persistence disabled; bot-state is not read or written.'; exit 0 ;;
+            true|1) ;;
+            *) echo 'Invalid boolean: ENABLE_PERSISTENCE' >&2; exit 1 ;;
+          esac
+          git config user.name 'paper-bot'
+          git config user.email 'paper-bot@users.noreply.github.com'
+          # ls-remote failure must abort; it must never look like an empty state.
+          remote_ref="$(git ls-remote --heads origin refs/heads/bot-state)"
+          if [ -n "$remote_ref" ]; then
+            git fetch origin refs/heads/bot-state:refs/heads/bot-state
+            git worktree add .bot-state bot-state
+          else
+            git worktree add --detach .bot-state
+            git -C .bot-state switch --orphan bot-state
+            printf 'state.lock\nstate.tmp\n' > .bot-state/.gitignore
+            printf '{"schema":1,"papers":{},"attempts":{}}\n' > .bot-state/state.json
+            git -C .bot-state add .gitignore state.json
+            git -C .bot-state commit -m 'Initialize paper bot state'
+            git -C .bot-state push origin HEAD:bot-state
+          fi
+      - name: Run daily pipeline
+        shell: bash
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          ZOTERO_API_KEY: ${{ secrets.ZOTERO_API_KEY }}
+          ZOTERO_USER_ID: ${{ secrets.ZOTERO_USER_ID }}
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+          ENABLE_FEISHU: ${{ vars.ENABLE_FEISHU || 'true' }}
+          ENABLE_ZOTERO: ${{ vars.ENABLE_ZOTERO || 'true' }}
+          ENABLE_AI_NOTES: ${{ vars.ENABLE_AI_NOTES || 'false' }}
+          ENABLE_PERSISTENCE: ${{ vars.ENABLE_PERSISTENCE || 'false' }}
+          ZOTERO_COLLECTION: ${{ vars.ZOTERO_COLLECTION || '自动收录' }}
+          AI_MODEL: ${{ vars.AI_MODEL || 'deepseek-chat' }}
+          MAX_DAILY_PUSH: ${{ vars.MAX_DAILY_PUSH || '3' }}
+        run: |
+          set -euo pipefail
+          case "${ENABLE_PERSISTENCE,,}" in
+            true|1) python main.py --state .bot-state/state.json --state-git ;;
+            false|0) python main.py ;;
+            *) echo 'Invalid boolean: ENABLE_PERSISTENCE' >&2; exit 1 ;;
+          esac
