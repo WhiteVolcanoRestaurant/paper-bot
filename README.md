@@ -73,12 +73,17 @@ Variables（同页面 Variables；也可作为本地环境变量）：
 
 ## fork 后启用 Actions
 
-1. Fork 仓库，先在 Actions 中启用 fork 的 workflow。检查自己的默认分支上已包含本次代码。
-2. 填写需要的 Secrets；在 Variables 里设置目标开关。只用 Zotero 可令 `ENABLE_FEISHU=false`，只用飞书可令 `ENABLE_ZOTERO=false`。笔记按需开启。
-3. 默认无需配置状态存储，保持 `ENABLE_PERSISTENCE=false` 或不设置此变量即可。工作流不会读取、创建或推送 `bot-state`，每次运行重新处理最新列表。若不希望重复推送或需要跨运行恢复，可在 Variables 设置 `ENABLE_PERSISTENCE=true`。
-4. 仅在开启持久化时，检查仓库/组织 Actions 策略允许 `daily` job 的 `contents: write` 及状态分支写入。首次会自动创建**独立无父历史的 `bot-state` 分支**，只包含 `.gitignore` 和 `state.json`；已有状态分支则直接复用。不要从代码分支复制出 `bot-state`。状态推送使用临时 `GITHUB_TOKEN`，无需个人 token；权限、网络或分支冲突失败时会中止，不会退回空状态。
-5. 先在本地运行离线测试和 dry-run。准备好真实收录时再在 Actions 手动运行 `Daily paper bot`；手动运行是正式操作，会产生真实外部写入和 AI 费用。
-6. 定时任务每天 UTC 04:00（北京时间 12:00）运行，也可手动触发。GitHub 可能排队延迟执行，消息会在抓取与筛选完成后发送，不能保证恰好 12:00 到达；以实际运行日志为准。Fork 的定时任务可能需要手动启用；长期无活动时检查平台是否停用了定时运行。
+**公开代码仓库的 `Daily paper bot` 工作流已在 GitHub 中停用，只用于分享代码。** 工作流文件仍保留，方便在自己的运行仓库开启。停用是该仓库的 GitHub 设置，不会随代码同步到其他仓库；自己的运行仓库可以继续每日运行。GitHub 默认停用公开仓库 fork 的定时工作流，需要用户主动启用。
+
+1. **创建自己的仓库**：Fork 本仓库，确认默认分支上有 `.github/workflows/paper-bot.yml`。如需私人状态，使用独立的 Private 运行仓库；公开仓库的 fork 本身不能单独改为 Private。
+2. **先配置凭据和开关**：打开自己仓库的 `Settings → Secrets and variables → Actions`，按照上面的配置表填写 Secrets 和 Variables。只用飞书时至少添加 `DEEPSEEK_API_KEY`、`FEISHU_WEBHOOK`，并设置 `ENABLE_FEISHU=true`、`ENABLE_ZOTERO=false`；只用 Zotero 则关闭飞书并填写 Zotero 凭据。笔记按需开启。
+3. **选择是否保存历史**：默认保持 `ENABLE_PERSISTENCE=false` 或不设置。需要跨运行去重、缓存和恢复时，设置 `ENABLE_PERSISTENCE=true`。此时确认仓库/组织 Actions 策略允许 `daily` job 的 `contents: write` 和状态分支写入。首次会自动创建只含 `.gitignore` 和 `state.json` 的独立无父历史 `bot-state` 分支，已有分支则直接复用；使用临时 `GITHUB_TOKEN`，无需个人 token。不要从代码分支复制出 `bot-state`。
+4. **启用仓库 Actions**：进入自己仓库的 `Actions` 页面。如果看到 fork 的确认提示，点击 `I understand my workflows, go ahead and enable them`。若仓库设置禁用了 Actions，先到 `Settings → Actions → General` 启用，并确保策略允许工作流使用的 `actions/checkout` 和 `actions/setup-python`。
+5. **启用机器人工作流**：在 Actions 左侧选择 `Daily paper bot`；若显示停用，点击 `Enable workflow`。若定时任务仍显示 fork 或无活动停用提示，按提示启用。仅允许仓库 Actions，并不代表每个工作流和定时任务都已启用。
+6. **手动验证**：先在本地运行离线测试和 dry-run。配置完成后，在 `Daily paper bot` 页面点击 `Run workflow`，选择默认分支（通常为 `main`），再确认运行。此操作会调用 AI 并实际推送/入库；在运行详情中确认 `verify`、`daily` 两个 job 成功。看不到按钮时，检查工作流是否启用及默认分支是否包含 `workflow_dispatch`。
+7. **等待每日定时运行**：启用后按默认分支的 `cron: '0 4 * * *'` 每天 UTC 04:00（北京时间 12:00）触发。消息在抓取与筛选完成后发送，GitHub 排队可能延迟。公开仓库连续 60 天无活动时，GitHub 可能自动停用定时任务，需要回到工作流页面重新启用。
+
+暂停自己的推送：打开 `Actions → Daily paper bot`，点击右侧 `… → Disable workflow`；恢复时点击 `Enable workflow`。无需删除工作流文件，也无需删除状态分支。界面操作参考 [GitHub 官方启用/停用指南](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows)。
 
 AI 调用按自己的 DeepSeek 账户计费，实际费用取决于模型、用量与实际请求时间。参见 [DeepSeek 官方价目表](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/)。
 
